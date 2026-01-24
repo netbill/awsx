@@ -5,8 +5,6 @@ go 1.23
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.1
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.95.1
-	github.com/google/uuid v1.6.0
-	github.com/netbill/pgx v0.1.0
 )
 
 require (
