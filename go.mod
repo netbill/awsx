@@ -1,4 +1,4 @@
-module github.com/netbill/imgx
+module github.com/netbill/awsx
 
 go 1.23
 
