@@ -36,15 +36,13 @@ func New(
 func (s *Service) PresignPut(
 	ctx context.Context,
 	key string,
-	contentLength int64,
 	ttl time.Duration,
 ) (uploadURL, getURL string, err error) {
 	putOut, err := s.presign.PresignPutObject(
 		ctx,
 		&s3.PutObjectInput{
-			Bucket:        aws.String(s.bucketName),
-			Key:           aws.String(key),
-			ContentLength: aws.Int64(contentLength),
+			Bucket: aws.String(s.bucketName),
+			Key:    aws.String(key),
 		},
 		s3.WithPresignExpires(ttl),
 	)
