@@ -45,8 +45,9 @@ func (s *Service) PresignPut(
 			Bucket:        aws.String(s.bucketName),
 			Key:           aws.String(key),
 			ContentLength: aws.Int64(contentLength),
-			Expires:       aws.Time(time.Now().UTC().Add(ttl)),
+			//Expires:       aws.Time(time.Now().UTC().Add(ttl)),
 		},
+		s3.WithPresignExpires(ttl),
 	)
 	if err != nil {
 		return "", "", err
@@ -58,6 +59,7 @@ func (s *Service) PresignPut(
 			Bucket: aws.String(s.bucketName),
 			Key:    aws.String(key),
 		},
+		s3.WithPresignExpires(ttl),
 		func(opts *s3.PresignOptions) {
 			opts.Expires = ttl
 		},
