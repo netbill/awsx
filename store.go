@@ -1,4 +1,4 @@
-package imgx
+package awsx
 
 import (
 	"context"
@@ -45,7 +45,6 @@ func (s *Service) PresignPut(
 			Bucket:        aws.String(s.bucketName),
 			Key:           aws.String(key),
 			ContentLength: aws.Int64(contentLength),
-			//Expires:       aws.Time(time.Now().UTC().Add(ttl)),
 		},
 		s3.WithPresignExpires(ttl),
 	)
