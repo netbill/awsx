@@ -2,6 +2,8 @@ package awsx
 
 import (
 	"context"
+	"io"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -66,6 +68,37 @@ func (s *Service) PresignPut(
 	}
 
 	return putOut.URL, getOut.URL, nil
+}
+
+func (s *Service) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
+	obj, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &s.bucketName,
+		Key:    &key,
+	})
+	if err != nil {
+		return io.ReadCloser(nil), err
+	}
+
+	return obj.Body, nil
+}
+
+func (s *Service) GetObjectRange(ctx context.Context, key string, maxBytes int64) (io.ReadCloser, error) {
+	if maxBytes <= 0 {
+		return s.GetObject(ctx, key)
+	}
+
+	rng := "bytes=0-" + strconv.FormatInt(maxBytes-1, 10)
+
+	obj, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+		Range:  aws.String(rng),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return obj.Body, nil
 }
 
 func (s *Service) HeadObject(ctx context.Context, key string) (*s3.HeadObjectOutput, error) {
