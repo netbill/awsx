@@ -2,8 +2,10 @@ package awsx
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -70,55 +72,96 @@ func (s *Service) PresignPut(
 	return putOut.URL, getOut.URL, nil
 }
 
-func (s *Service) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
-	obj, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+func (s *Service) HeadObject(ctx context.Context, key string) (*s3.HeadObjectOutput, error) {
+	output, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(s.bucketName),
+		Key:    aws.String(key),
+	})
+
+	return output, err
+}
+
+func (s *Service) GetObject(
+	ctx context.Context,
+	key string,
+) (body io.ReadCloser, size int64, err error) {
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: &s.bucketName,
 		Key:    &key,
 	})
 	if err != nil {
-		return io.ReadCloser(nil), err
+		return nil, 0, err
 	}
 
-	return obj.Body, nil
+	if output.Body == nil {
+		return nil, 0, fmt.Errorf("s3 get object: body is nil")
+	}
+
+	if output.ContentLength == nil {
+		_ = output.Body.Close()
+		return nil, 0, fmt.Errorf("s3 get object: content length is nil")
+	}
+
+	return output.Body, *output.ContentLength, nil
 }
 
-func (s *Service) GetObjectRange(ctx context.Context, key string, maxBytes int64) (io.ReadCloser, error) {
-	if maxBytes <= 0 {
+func (s *Service) GetObjectRange(
+	ctx context.Context,
+	key string,
+	bytes int64,
+) (body io.ReadCloser, size int64, err error) {
+	if bytes <= 0 {
 		return s.GetObject(ctx, key)
 	}
 
-	rng := "bytes=0-" + strconv.FormatInt(maxBytes-1, 10)
+	rng := "bytes=0-" + strconv.FormatInt(bytes-1, 10)
 
-	obj, err := s.client.GetObject(ctx, &s3.GetObjectInput{
+	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(s.bucketName),
 		Key:    aws.String(key),
 		Range:  aws.String(rng),
 	})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return obj.Body, nil
+	if output.Body == nil {
+		return nil, 0, fmt.Errorf("s3 get object range: body is nil")
+	}
+
+	if output.ContentRange == nil {
+		_ = output.Body.Close()
+		return nil, 0, fmt.Errorf("s3 get object range: content-range is nil")
+	}
+
+	cr := strings.TrimSpace(*output.ContentRange)
+	slash := strings.LastIndexByte(cr, '/')
+	if slash < 0 || slash == len(cr)-1 {
+		_ = output.Body.Close()
+		return nil, 0, fmt.Errorf("s3 get object range: invalid content-range %q", cr)
+	}
+
+	totalStr := strings.TrimSpace(cr[slash+1:])
+	total, err := strconv.ParseInt(totalStr, 10, 64)
+	if err != nil {
+		_ = output.Body.Close()
+		return nil, 0, fmt.Errorf("s3 get object range: invalid content-range total %q: %w", totalStr, err)
+	}
+
+	return output.Body, total, nil
 }
 
-func (s *Service) HeadObject(ctx context.Context, key string) (*s3.HeadObjectOutput, error) {
-	return s.client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(key),
-	})
-}
-
-func (s *Service) CopyObject(ctx context.Context, tmplKey, finalKey string) (string, error) {
+func (s *Service) CopyObject(ctx context.Context, fromKey, toKey string) (string, error) {
 	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
 		Bucket:     aws.String(s.bucketName),
-		Key:        aws.String(finalKey),
-		CopySource: aws.String(s.bucketName + "/" + tmplKey),
+		Key:        aws.String(toKey),
+		CopySource: aws.String(s.bucketName + "/" + fromKey),
 	})
 	if err != nil {
 		return "", err
 	}
 
-	return finalKey, nil
+	return toKey, nil
 }
 
 func (s *Service) DeleteObject(ctx context.Context, key string) error {

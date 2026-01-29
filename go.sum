@@ -20,7 +20,7 @@ github.com/aws/aws-sdk-go-v2/service/s3 v1.95.1 h1:C2dUPSnEpy4voWFIq3JNd8gN0Y5vY
 github.com/aws/aws-sdk-go-v2/service/s3 v1.95.1/go.mod h1:5jggDlZ2CLQhwJBiZJb4vfk4f0GxWdEDruWKEJ1xOdo=
 github.com/aws/smithy-go v1.24.0 h1:LpilSUItNPFr1eY85RYgTIg5eIEPtvFbskaFcmmIUnk=
 github.com/aws/smithy-go v1.24.0/go.mod h1:LEj2LM3rBRQJxPZTB4KuzZkaZYnZPnvgIhb4pu07mx0=
-github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
-github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/netbill/pgx v0.1.0 h1:4keP+ykB5Xe5+G+8lK7yVvs3UDWG4keehpPVRz5v8PE=
-github.com/netbill/pgx v0.1.0/go.mod h1:fPsBVzaAnXBo6cjrQi3kMlmycIsZ/pi/w0lr5//wUFE=
+github.com/google/jsonapi v1.0.0 h1:qIGgO5Smu3yJmSs+QlvhQnrscdZfFhiV6S8ryJAglqU=
+github.com/google/jsonapi v1.0.0/go.mod h1:YYHiRPJT8ARXGER8In9VuLv4qvLfDmA9ULQqptbLE4s=
+github.com/netbill/ape v0.1.1 h1:c09GAXms8UCEs8GEXdtOIBCNDiKYHRhSDNFmbbQBGyk=
+github.com/netbill/ape v0.1.1/go.mod h1:0VOAEb/M94S4L/tby8PhN3QcG/4nJeXQN5loloLmXWk=
