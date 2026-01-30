@@ -12,40 +12,33 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-type Service struct {
-	bucketName string
-	client     *s3.Client
-	presign    *s3.PresignClient
-}
-
-type Config struct {
-	BucketName string
-	AwsCfg     aws.Config
-	PutTTL     time.Duration
-	GetTTL     time.Duration
+type Bucket struct {
+	name    string
+	client  *s3.Client
+	presign *s3.PresignClient
 }
 
 func New(
-	bucketName string,
+	name string,
 	client *s3.Client,
 	presign *s3.PresignClient,
-) *Service {
-	return &Service{
-		bucketName: bucketName,
-		client:     client,
-		presign:    presign,
+) *Bucket {
+	return &Bucket{
+		name:    name,
+		client:  client,
+		presign: presign,
 	}
 }
 
-func (s *Service) PresignPut(
+func (b *Bucket) PresignPut(
 	ctx context.Context,
 	key string,
 	ttl time.Duration,
 ) (uploadURL, getURL string, err error) {
-	putOut, err := s.presign.PresignPutObject(
+	putOut, err := b.presign.PresignPutObject(
 		ctx,
 		&s3.PutObjectInput{
-			Bucket: aws.String(s.bucketName),
+			Bucket: aws.String(b.name),
 			Key:    aws.String(key),
 		},
 		s3.WithPresignExpires(ttl),
@@ -54,10 +47,10 @@ func (s *Service) PresignPut(
 		return "", "", err
 	}
 
-	getOut, err := s.presign.PresignGetObject(
+	getOut, err := b.presign.PresignGetObject(
 		ctx,
 		&s3.GetObjectInput{
-			Bucket: aws.String(s.bucketName),
+			Bucket: aws.String(b.name),
 			Key:    aws.String(key),
 		},
 		s3.WithPresignExpires(ttl),
@@ -72,21 +65,24 @@ func (s *Service) PresignPut(
 	return putOut.URL, getOut.URL, nil
 }
 
-func (s *Service) HeadObject(ctx context.Context, key string) (*s3.HeadObjectOutput, error) {
-	output, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{
-		Bucket: aws.String(s.bucketName),
+func (b *Bucket) HeadObject(
+	ctx context.Context,
+	key string,
+) (*s3.HeadObjectOutput, error) {
+	output, err := b.client.HeadObject(ctx, &s3.HeadObjectInput{
+		Bucket: aws.String(b.name),
 		Key:    aws.String(key),
 	})
 
 	return output, err
 }
 
-func (s *Service) GetObject(
+func (b *Bucket) GetObject(
 	ctx context.Context,
 	key string,
 ) (body io.ReadCloser, size int64, err error) {
-	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: &s.bucketName,
+	output, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: &b.name,
 		Key:    &key,
 	})
 	if err != nil {
@@ -105,19 +101,19 @@ func (s *Service) GetObject(
 	return output.Body, *output.ContentLength, nil
 }
 
-func (s *Service) GetObjectRange(
+func (b *Bucket) GetObjectRange(
 	ctx context.Context,
 	key string,
 	bytes int64,
 ) (body io.ReadCloser, size int64, err error) {
 	if bytes <= 0 {
-		return s.GetObject(ctx, key)
+		return b.GetObject(ctx, key)
 	}
 
 	rng := "bytes=0-" + strconv.FormatInt(bytes-1, 10)
 
-	output, err := s.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: aws.String(s.bucketName),
+	output, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(b.name),
 		Key:    aws.String(key),
 		Range:  aws.String(rng),
 	})
@@ -151,11 +147,14 @@ func (s *Service) GetObjectRange(
 	return output.Body, total, nil
 }
 
-func (s *Service) CopyObject(ctx context.Context, fromKey, toKey string) (string, error) {
-	_, err := s.client.CopyObject(ctx, &s3.CopyObjectInput{
-		Bucket:     aws.String(s.bucketName),
+func (b *Bucket) CopyObject(
+	ctx context.Context,
+	fromKey, toKey string,
+) (string, error) {
+	_, err := b.client.CopyObject(ctx, &s3.CopyObjectInput{
+		Bucket:     aws.String(b.name),
 		Key:        aws.String(toKey),
-		CopySource: aws.String(s.bucketName + "/" + fromKey),
+		CopySource: aws.String(b.name + "/" + fromKey),
 	})
 	if err != nil {
 		return "", err
@@ -164,9 +163,12 @@ func (s *Service) CopyObject(ctx context.Context, fromKey, toKey string) (string
 	return toKey, nil
 }
 
-func (s *Service) DeleteObject(ctx context.Context, key string) error {
-	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
-		Bucket: aws.String(s.bucketName),
+func (b *Bucket) DeleteObject(
+	ctx context.Context,
+	key string,
+) error {
+	_, err := b.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(b.name),
 		Key:    aws.String(key),
 	})
 	return err
