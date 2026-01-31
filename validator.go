@@ -24,7 +24,7 @@ func (v *ImgObjectValidator) ValidateImageSize(size uint) (bool, error) {
 	return true, nil
 }
 
-func (v *ImgObjectValidator) ValidateImage(data []byte) (bool, error) {
+func (v *ImgObjectValidator) ValidateImageResolution(data []byte) (bool, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return false, fmt.Errorf("decode config: %w", err)
