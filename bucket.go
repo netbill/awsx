@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -54,9 +53,6 @@ func (b *Bucket) PresignPut(
 			Key:    aws.String(key),
 		},
 		s3.WithPresignExpires(ttl),
-		func(opts *s3.PresignOptions) {
-			opts.Expires = ttl
-		},
 	)
 	if err != nil {
 		return "", "", err
@@ -80,71 +76,44 @@ func (b *Bucket) HeadObject(
 func (b *Bucket) GetObject(
 	ctx context.Context,
 	key string,
-) (body io.ReadCloser, size int64, err error) {
-	output, err := b.client.GetObject(ctx, &s3.GetObjectInput{
-		Bucket: &b.name,
-		Key:    &key,
+) (body io.ReadCloser, err error) {
+	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(b.name),
+		Key:    aws.String(key),
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, err
+	}
+	if out.Body == nil {
+		return nil, fmt.Errorf("s3 get object: body is nil")
 	}
 
-	if output.Body == nil {
-		return nil, 0, fmt.Errorf("s3 get object: body is nil")
-	}
-
-	if output.ContentLength == nil {
-		_ = output.Body.Close()
-		return nil, 0, fmt.Errorf("s3 get object: content length is nil")
-	}
-
-	return output.Body, *output.ContentLength, nil
+	return out.Body, nil
 }
 
 func (b *Bucket) GetObjectRange(
 	ctx context.Context,
 	key string,
 	bytes int64,
-) (body io.ReadCloser, size int64, err error) {
+) (io.ReadCloser, error) {
 	if bytes <= 0 {
 		return b.GetObject(ctx, key)
 	}
 
 	rng := "bytes=0-" + strconv.FormatInt(bytes-1, 10)
 
-	output, err := b.client.GetObject(ctx, &s3.GetObjectInput{
+	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(b.name),
 		Key:    aws.String(key),
 		Range:  aws.String(rng),
 	})
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-
-	if output.Body == nil {
-		return nil, 0, fmt.Errorf("s3 get object range: body is nil")
+	if out.Body == nil {
+		return nil, fmt.Errorf("s3 get object range: body is nil")
 	}
-
-	if output.ContentRange == nil {
-		_ = output.Body.Close()
-		return nil, 0, fmt.Errorf("s3 get object range: content-range is nil")
-	}
-
-	cr := strings.TrimSpace(*output.ContentRange)
-	slash := strings.LastIndexByte(cr, '/')
-	if slash < 0 || slash == len(cr)-1 {
-		_ = output.Body.Close()
-		return nil, 0, fmt.Errorf("s3 get object range: invalid content-range %q", cr)
-	}
-
-	totalStr := strings.TrimSpace(cr[slash+1:])
-	total, err := strconv.ParseInt(totalStr, 10, 64)
-	if err != nil {
-		_ = output.Body.Close()
-		return nil, 0, fmt.Errorf("s3 get object range: invalid content-range total %q: %w", totalStr, err)
-	}
-
-	return output.Body, total, nil
+	return out.Body, nil
 }
 
 func (b *Bucket) CopyObject(
