@@ -2,20 +2,23 @@ package awsx
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 )
 
 type Bucket interface {
 	PresignPut(ctx context.Context, key string, ttl time.Duration) (uploadURL, getURL string, err error)
+
 	HeadObject(ctx context.Context, key string) (*s3.HeadObjectOutput, error)
-	GetObject(ctx context.Context, key string) (io.ReadCloser, error)
-	GetObjectRange(ctx context.Context, key string, bytes int64) (io.ReadCloser, error)
+	GetObject(ctx context.Context, key string) (*s3.GetObjectOutput, error)
+	GetObjectRange(ctx context.Context, key string, bytes int64) (*s3.GetObjectOutput, error)
+
 	CopyObject(ctx context.Context, fromKey, toKey string) error
 	DeleteObject(ctx context.Context, key string) error
 }
@@ -26,9 +29,21 @@ type bucket struct {
 	presign *s3.PresignClient
 }
 
-func New(name string, client *s3.Client, presign *s3.PresignClient) Bucket {
-	return &bucket{name: name, client: client, presign: presign}
+func New(name string, cfg aws.Config) Bucket {
+	client := s3.NewFromConfig(cfg)
+	presign := s3.NewPresignClient(client)
+
+	return &bucket{
+		name:    name,
+		client:  client,
+		presign: presign,
+	}
 }
+
+var (
+	ErrNotFound     = errors.New("awsx: object not found")
+	ErrAccessDenied = errors.New("awsx: access denied")
+)
 
 func (b *bucket) PresignPut(ctx context.Context, key string, ttl time.Duration) (uploadURL, getURL string, err error) {
 	putOut, err := b.presign.PresignPutObject(
@@ -63,7 +78,7 @@ func (b *bucket) HeadObject(ctx context.Context, key string) (*s3.HeadObjectOutp
 	return res, nil
 }
 
-func (b *bucket) GetObject(ctx context.Context, key string) (io.ReadCloser, error) {
+func (b *bucket) GetObject(ctx context.Context, key string) (*s3.GetObjectOutput, error) {
 	out, err := b.client.GetObject(ctx, &s3.GetObjectInput{
 		Bucket: aws.String(b.name),
 		Key:    aws.String(key),
@@ -71,13 +86,11 @@ func (b *bucket) GetObject(ctx context.Context, key string) (io.ReadCloser, erro
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	if out.Body == nil {
-		return nil, fmt.Errorf("awsx: get object: body is nil")
-	}
-	return out.Body, nil
+
+	return out, nil
 }
 
-func (b *bucket) GetObjectRange(ctx context.Context, key string, bytes int64) (io.ReadCloser, error) {
+func (b *bucket) GetObjectRange(ctx context.Context, key string, bytes int64) (*s3.GetObjectOutput, error) {
 	if bytes <= 0 {
 		return b.GetObject(ctx, key)
 	}
@@ -91,10 +104,8 @@ func (b *bucket) GetObjectRange(ctx context.Context, key string, bytes int64) (i
 	if err != nil {
 		return nil, Wrap(err)
 	}
-	if out.Body == nil {
-		return nil, fmt.Errorf("awsx: get object range: body is nil")
-	}
-	return out.Body, nil
+
+	return out, nil
 }
 
 func (b *bucket) CopyObject(ctx context.Context, fromKey, toKey string) error {
@@ -112,4 +123,22 @@ func (b *bucket) DeleteObject(ctx context.Context, key string) error {
 		Key:    aws.String(key),
 	})
 	return Wrap(err)
+}
+
+func Wrap(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		switch apiErr.ErrorCode() {
+		case "NotFound", "NoSuchKey":
+			return fmt.Errorf("%w: %v", ErrNotFound, err)
+		case "AccessDenied":
+			return fmt.Errorf("%w: %v", ErrAccessDenied, err)
+		}
+	}
+
+	return err
 }
